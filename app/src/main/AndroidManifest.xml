@@ -7,7 +7,8 @@
 
     <application
         android:allowBackup="false"
-        android:label="Flashlight"
+        android:icon="@drawable/ic_launcher"
+        android:label="B Light"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
