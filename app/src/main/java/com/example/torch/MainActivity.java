@@ -172,7 +172,18 @@ root.addView(threeDForestView, new FrameLayout.LayoutParams(
     private void goAlive() {
         state = ST_ALIVE;
         startForestMusic();
-        forestView.setAlive(true);
+        forestHandler.removeCallbacks(journeyEnd);
+forestView.setAlive(false);
+
+threeDForestView.setVisibility(View.VISIBLE);
+threeDForestView.setAlpha(0f);
+threeDForestView.startJourney();
+threeDForestView.animate()
+        .alpha(1f)
+        .setDuration(900)
+        .start();
+
+forestHandler.postDelayed(journeyEnd, 290000L);
         if (torchCameraId != null) {
             try {
                 cameraManager.setTorchMode(torchCameraId, false);
