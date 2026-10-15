@@ -178,6 +178,7 @@ public class MainActivity extends Activity {
 
     private void restoreForest() {
         state = ST_RESTORING;
+        stopForestMusic();
         mossSphere.animate().cancel();
         shadow.animate().cancel();
         stopFloating();
