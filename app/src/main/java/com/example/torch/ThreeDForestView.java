@@ -103,62 +103,108 @@ void returnToStart() {
             Matrix.perspectiveM(projection, 0, 66f, width/(float)height, .08f, 130f);
         }
 
-        @Override public void onDrawFrame(GL10 gl) {
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
-            if (vertices == null || program == 0) return;
-            
-long now = System.nanoTime();
-float t = active ? (now - startNs) / 1.0e9f : 0f;
+        
+@Override
+public void onDrawFrame(GL10 gl) {
+    GLES20.glClear(
+            GLES20.GL_COLOR_BUFFER_BIT |
+            GLES20.GL_DEPTH_BUFFER_BIT
+    );
 
-float progress;
-if (returning) {
-    float returnElapsed = (now - returnNs) / 1.0e9f;
-    float fraction = smooth(Math.min(1f, returnElapsed / 3f));
-    progress = returnFromProgress * (1f - fraction);
-} else {
-    progress = active ? Math.min(1f, t / 290f) : 0f;
-}
+    if (vertices == null || program == 0) return;
 
-float journeyT = progress * 290f;
-float descent = smooth(Math.min(1f, journeyT / 9f));
+    long now = System.nanoTime();
+    float t = active ? (now - startNs) / 1.0e9f : 0f;
 
-float camX = (float) Math.sin(progress * 10.5f) * 1.3f
-        + (float) Math.sin(progress * 23f) * .22f;
-float camZ = 7.2f - progress * 51f;
-float camY = 3.25f - 1.55f * descent
-        + (active && !returning
-        ? (float) Math.sin(t * 1.6f) * .045f : 0f);
+    float progress;
+    float wobbleTime = 0f;
 
-float lookY = 2.5f - 1.4f * descent;
-float lookX = camX + (float) Math.sin(progress * 8f) * .7f;
+    if (returning) {
+        float returnElapsed = (now - returnNs) / 1.0e9f;
 
-Matrix.setLookAtM(
-        view, 0,
-        camX, camY, camZ,
-        lookX, lookY, camZ - 6f,
-        0f, 1f, 0f
-);
-            
-            Matrix.multiplyMM(vp,0,projection,0,view,0);
-            GLES20.glUseProgram(program);
-            GLES20.glUniformMatrix4fv(uMvp,1,false,vp,0);
-            GLES20.glUniform1f(uTime,t);
-            vertices.position(0);
-            GLES20.glEnableVertexAttribArray(aPos); GLES20.glEnableVertexAttribArray(aCol);
-            GLES20.glVertexAttribPointer(aPos,3,GLES20.GL_FLOAT,false,24,vertices);
-            vertices.position(3);
-            GLES20.glVertexAttribPointer(aCol,3,GLES20.GL_FLOAT,false,24,vertices);
-            GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,count);
-            GLES20.glDisableVertexAttribArray(aPos); GLES20.glDisableVertexAttribArray(aCol);
-            if (returning && (System.nanoTime() - returnNs) >= 3_000_000_000L) {
-    returning = false;
-    active = false;
-    post(() -> {
-        setRenderMode(RENDERMODE_WHEN_DIRTY);
-        requestRender();
-    });
+        if (returnElapsed < 3f) {
+            // برگشت سریع، مثل پخش معکوس فیلم
+            progress = returnFromProgress
+                    * (1f - Math.max(0f, returnElapsed / 3f));
+        } else {
+            progress = 0f;
+            wobbleTime = returnElapsed - 3f;
+
+            if (returnElapsed >= 6f) {
+                returning = false;
+                active = false;
             }
         }
+    } else if (active) {
+        progress = Math.min(1f, t / 290f);
+
+        if (t >= 290f) {
+            progress = 1f;
+            wobbleTime = Math.min(3f, t - 290f);
+        }
+    } else {
+        progress = 0f;
+    }
+
+    float theta = progress * (float) (Math.PI * 2.0);
+
+    // مسیر حلقه‌ای؛ نقطه شروع و پایان یکسان است
+    float camX = 8f * (float) Math.sin(theta);
+    float camZ = 7.2f
+            - 25.5f * (1f - (float) Math.cos(theta));
+    float camY = 3.25f
+            - 1.55f * (float) Math.sin(Math.PI * progress);
+
+    float lookX = camX
+            + ((progress < 0.001f || progress > 0.999f)
+            ? 0.12f
+            : (float) Math.sin(theta) * 0.7f);
+
+    float lookY = 2.4f
+            - 1.2f * (float) Math.sin(Math.PI * progress);
+    float lookZ = camZ - 6f * (float) Math.cos(theta);
+
+    // نوسان ملایم دوربین در پایان
+    if (wobbleTime > 0f && wobbleTime < 3f) {
+        camX += (float) Math.sin(wobbleTime * 2.7f) * 0.045f;
+        camY += (float) Math.sin(wobbleTime * 2.1f) * 0.035f;
+        lookX += (float) Math.sin(wobbleTime * 2.4f) * 0.025f;
+    }
+
+    Matrix.setLookAtM(
+            view, 0,
+            camX, camY, camZ,
+            lookX, lookY, lookZ,
+            0f, 1f, 0f
+    );
+
+    Matrix.multiplyMM(vp, 0, projection, 0, view, 0);
+
+    GLES20.glUseProgram(program);
+    GLES20.glUniformMatrix4fv(uMvp, 1, false, vp, 0);
+    GLES20.glUniform1f(uTime, t);
+
+    vertices.position(0);
+
+    GLES20.glEnableVertexAttribArray(aPos);
+    GLES20.glEnableVertexAttribArray(aCol);
+
+    GLES20.glVertexAttribPointer(
+            aPos, 3, GLES20.GL_FLOAT, false, 24, vertices
+    );
+
+    vertices.position(3);
+
+    GLES20.glVertexAttribPointer(
+            aCol, 3, GLES20.GL_FLOAT, false, 24, vertices
+    );
+
+    GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, count);
+
+    GLES20.glDisableVertexAttribArray(aPos);
+    GLES20.glDisableVertexAttribArray(aCol);
+}
+        
 
         private void buildScene() {
             Mesh m = new Mesh();
