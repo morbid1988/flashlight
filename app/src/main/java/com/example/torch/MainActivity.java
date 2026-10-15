@@ -35,6 +35,10 @@ public class MainActivity extends Activity {
 
     private PsychForestView forestView;
     private MediaPlayer forestMusic;
+    private ThreeDForestView threeDForestView;
+private final Handler forestHandler =
+        new Handler(Looper.getMainLooper());
+private final Runnable journeyEnd = this::finishJourney;
     private View whiteCircle;
     private ImageView mossSphere;
     private View shadow;
