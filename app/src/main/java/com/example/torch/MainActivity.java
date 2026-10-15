@@ -337,7 +337,7 @@ private void stopForestMusic() {
         forestMusic.release();
         forestMusic = null;
     }
-    
+}
     @Override
     protected void onDestroy() {
         super.onDestroy();
