@@ -85,6 +85,14 @@ private final Runnable journeyEnd = this::finishJourney;
         root.addView(forestView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
+        // 3D forest scene, hidden until the journey starts
+threeDForestView = new ThreeDForestView(this);
+threeDForestView.setAlpha(0f);
+threeDForestView.setVisibility(View.INVISIBLE);
+
+root.addView(threeDForestView, new FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams.MATCH_PARENT));
 
         // Soft shadow on the "ground" under the floating sphere
         shadow = new View(this);
