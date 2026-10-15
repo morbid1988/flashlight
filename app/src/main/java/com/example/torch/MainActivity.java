@@ -174,6 +174,7 @@ root.addView(threeDForestView, new FrameLayout.LayoutParams(
         startForestMusic();
         forestHandler.removeCallbacks(journeyEnd);
 forestView.setAlive(false);
+        forestView.setRipple(0f, 0f, 0f);
 
 threeDForestView.setVisibility(View.VISIBLE);
 threeDForestView.setAlpha(0f);
@@ -201,8 +202,53 @@ forestHandler.postDelayed(journeyEnd, 290000L);
         shadow.animate().alpha(0f).setDuration(3000).start();
     }
 
+private void finishJourney() {
+    if (state != ST_ALIVE) return;
+
+    state = ST_RESTORING;
+    stopForestMusic();
+    threeDForestView.stopJourney();
+
+    threeDForestView.animate()
+            .alpha(0f)
+            .setDuration(500)
+            .withEndAction(() -> {
+                threeDForestView.setVisibility(View.INVISIBLE);
+                forestView.setAlpha(1f);
+                forestView.setAlive(true);
+
+                forestHandler.postDelayed(() -> {
+                    forestView.setAlive(false);
+
+                    if (torchCameraId != null) {
+                        try {
+                            cameraManager.setTorchMode(torchCameraId, true);
+                        } catch (CameraAccessException | IllegalArgumentException ignored) {
+                        }
+                    }
+
+                    sphereHolder.setScaleX(1f);
+                    sphereHolder.setScaleY(1f);
+                    sphereHolder.setTranslationX(0f);
+                    sphereHolder.setTranslationY(0f);
+                    mossSphere.setAlpha(1f);
+                    whiteCircle.setAlpha(0f);
+                    shadow.setAlpha(1f);
+
+                    state = ST_ON;
+                    startFloating();
+                }, 3000L);
+            })
+            .start();
+}
+    
     private void restoreForest() {
         state = ST_RESTORING;
+        forestHandler.removeCallbacks(journeyEnd);
+threeDForestView.stopJourney();
+threeDForestView.animate().cancel();
+threeDForestView.setAlpha(0f);
+threeDForestView.setVisibility(View.INVISIBLE);
         stopForestMusic();
         mossSphere.animate().cancel();
         shadow.animate().cancel();
