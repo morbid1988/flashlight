@@ -17,6 +17,8 @@ import java.util.Random;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.Toast;
+import android.os.Handler;
+import android.os.Looper;
 
 public class MainActivity extends Activity {
 
