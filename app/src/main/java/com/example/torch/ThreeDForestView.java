@@ -36,7 +36,11 @@ public final class ThreeDForestView extends GLSurfaceView {
         setRenderMode(RENDERMODE_WHEN_DIRTY);
         requestRender();
     }
-
+    
+public void returnToStart() {
+    forestRenderer.returnToStart();
+    setRenderMode(RENDERMODE_CONTINUOUSLY);
+}
     private static final class ForestRenderer implements GLSurfaceView.Renderer {
         private static final String VERTEX =
             "uniform mat4 uMVP; attribute vec3 aPos; attribute vec3 aCol; " +
@@ -56,11 +60,31 @@ public final class ThreeDForestView extends GLSurfaceView {
         private int count, program, aPos, aCol, uMvp, uTime;
         private volatile boolean active;
         private volatile long startNs;
+        private volatile boolean returning;
+private volatile long returnNs;
+private volatile float returnFromProgress;
         private int width = 1, height = 1;
 
-        void start() { startNs = System.nanoTime(); active = true; }
-        void stop() { active = false; }
+        void start() {
+    startNs = System.nanoTime();
+    active = true;
+    returning = false;
+}
 
+void stop() {
+    active = false;
+    returning = false;
+}
+
+void returnToStart() {
+    if (!active || returning) return;
+
+    long now = System.nanoTime();
+    float elapsed = (now - startNs) / 1.0e9f;
+    returnFromProgress = Math.min(1f, elapsed / 290f);
+    returnNs = now;
+    returning = true;
+}
         @Override public void onSurfaceCreated(GL10 gl, EGLConfig config) {
             GLES20.glClearColor(.012f, .022f, .018f, 1f);
             GLES20.glEnable(GLES20.GL_DEPTH_TEST);
@@ -82,15 +106,39 @@ public final class ThreeDForestView extends GLSurfaceView {
         @Override public void onDrawFrame(GL10 gl) {
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
             if (vertices == null || program == 0) return;
-            float t = active ? (System.nanoTime()-startNs)/1.0e9f : 0f;
-            float progress = active ? Math.min(1f, t/290f) : 0f;
-            float descent = smooth(Math.min(1f, t/9f));
-            float camX = active ? (float)Math.sin(progress*10.5f)*1.3f + (float)Math.sin(progress*23f)*.22f : 0f;
-            float camZ = active ? 7.2f-progress*51f : 7.2f;
-            float camY = active ? 3.25f-1.55f*descent+(float)Math.sin(t*1.6f)*.045f : 3.25f;
-            float lookY = active ? 2.5f-1.4f*descent : 2.4f;
-            float lookX = camX + (active ? (float)Math.sin(progress*8f)*.7f : .12f);
-            Matrix.setLookAtM(view,0,camX,camY,camZ,lookX,lookY,camZ-6f,0f,1f,0f);
+            
+long now = System.nanoTime();
+float t = active ? (now - startNs) / 1.0e9f : 0f;
+
+float progress;
+if (returning) {
+    float returnElapsed = (now - returnNs) / 1.0e9f;
+    float fraction = smooth(Math.min(1f, returnElapsed / 3f));
+    progress = returnFromProgress * (1f - fraction);
+} else {
+    progress = active ? Math.min(1f, t / 290f) : 0f;
+}
+
+float journeyT = progress * 290f;
+float descent = smooth(Math.min(1f, journeyT / 9f));
+
+float camX = (float) Math.sin(progress * 10.5f) * 1.3f
+        + (float) Math.sin(progress * 23f) * .22f;
+float camZ = 7.2f - progress * 51f;
+float camY = 3.25f - 1.55f * descent
+        + (active && !returning
+        ? (float) Math.sin(t * 1.6f) * .045f : 0f);
+
+float lookY = 2.5f - 1.4f * descent;
+float lookX = camX + (float) Math.sin(progress * 8f) * .7f;
+
+Matrix.setLookAtM(
+        view, 0,
+        camX, camY, camZ,
+        lookX, lookY, camZ - 6f,
+        0f, 1f, 0f
+);
+            
             Matrix.multiplyMM(vp,0,projection,0,view,0);
             GLES20.glUseProgram(program);
             GLES20.glUniformMatrix4fv(uMvp,1,false,vp,0);
@@ -102,6 +150,14 @@ public final class ThreeDForestView extends GLSurfaceView {
             GLES20.glVertexAttribPointer(aCol,3,GLES20.GL_FLOAT,false,24,vertices);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,count);
             GLES20.glDisableVertexAttribArray(aPos); GLES20.glDisableVertexAttribArray(aCol);
+            if (returning && (System.nanoTime() - returnNs) >= 3_000_000_000L) {
+    returning = false;
+    active = false;
+    post(() -> {
+        setRenderMode(RENDERMODE_WHEN_DIRTY);
+        requestRender();
+    });
+            }
         }
 
         private void buildScene() {
