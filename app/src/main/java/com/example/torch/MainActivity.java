@@ -412,6 +412,10 @@ private void stopForestMusic() {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        forestHandler.removeCallbacks(journeyEnd);
+if (threeDForestView != null) {
+    threeDForestView.stopJourney();
+}
         stopForestMusic();
         if (floatAnim != null) {
             floatAnim.cancel();
