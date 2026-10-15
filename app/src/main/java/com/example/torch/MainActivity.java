@@ -1,5 +1,5 @@
 package com.example.torch;
-
+import android.media.MediaPlayer;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.Context;
@@ -32,6 +32,7 @@ public class MainActivity extends Activity {
     private final Random random = new Random();
 
     private PsychForestView forestView;
+    private MediaPlayer forestMusic;
     private View whiteCircle;
     private ImageView mossSphere;
     private View shadow;
@@ -156,6 +157,7 @@ public class MainActivity extends Activity {
 
     private void goAlive() {
         state = ST_ALIVE;
+        startForestMusic();
         forestView.setAlive(true);
         if (torchCameraId != null) {
             try {
@@ -311,7 +313,30 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Could not control the flash", Toast.LENGTH_SHORT).show();
         }
     }
+private void startForestMusic() {
+    if (forestMusic == null) {
+        forestMusic = MediaPlayer.create(this, R.raw.forest_music);
+    }
 
+    if (forestMusic != null) {
+        forestMusic.setLooping(true);
+
+        if (!forestMusic.isPlaying()) {
+            forestMusic.start();
+        }
+    }
+}
+
+private void stopForestMusic() {
+    if (forestMusic != null) {
+        if (forestMusic.isPlaying()) {
+            forestMusic.stop();
+        }
+
+        forestMusic.release();
+        forestMusic = null;
+    }
+    
     @Override
     protected void onDestroy() {
         super.onDestroy();
