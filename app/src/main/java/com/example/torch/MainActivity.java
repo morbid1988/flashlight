@@ -341,6 +341,7 @@ private void stopForestMusic() {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        stopForestMusic();
         if (floatAnim != null) {
             floatAnim.cancel();
         }
