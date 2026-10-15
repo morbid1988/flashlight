@@ -161,13 +161,17 @@ root.addView(threeDForestView, new FrameLayout.LayoutParams(
 
     // Tap on the forest while the torch is on: the forest comes alive, torch goes off,
     // the moss sphere dissolves over 3 seconds. Tap again: everything returns.
-    private void onForestTap() {
+    
+private void onForestTap() {
     if (state == ST_ON) {
         goAlive();
     } else if (state == ST_ALIVE) {
+        forestHandler.removeCallbacks(journeyEnd);
         threeDForestView.returnToStart();
+        forestHandler.postDelayed(journeyEnd, 6000L);
     }
-    }
+}
+
 
     private void goAlive() {
         state = ST_ALIVE;
@@ -184,7 +188,7 @@ threeDForestView.animate()
         .setDuration(900)
         .start();
 
-forestHandler.postDelayed(journeyEnd, 290000L);
+forestHandler.postDelayed(journeyEnd, 293000L);
         if (torchCameraId != null) {
             try {
                 cameraManager.setTorchMode(torchCameraId, false);
@@ -202,10 +206,13 @@ forestHandler.postDelayed(journeyEnd, 290000L);
         shadow.animate().alpha(0f).setDuration(3000).start();
     }
 
+
 private void finishJourney() {
     if (state != ST_ALIVE) return;
 
     state = ST_RESTORING;
+    forestHandler.removeCallbacks(journeyEnd);
+
     stopForestMusic();
     threeDForestView.stopJourney();
 
@@ -214,33 +221,37 @@ private void finishJourney() {
             .setDuration(500)
             .withEndAction(() -> {
                 threeDForestView.setVisibility(View.INVISIBLE);
+
                 forestView.setAlpha(1f);
-                forestView.setAlive(true);
+                forestView.setAlive(false);
+                forestView.setRipple(0f, 0f, 0f);
 
-                forestHandler.postDelayed(() -> {
-                    forestView.setAlive(false);
+                sphereHolder.animate().cancel();
+                mossSphere.animate().cancel();
+                shadow.animate().cancel();
 
-                    if (torchCameraId != null) {
-                        try {
-                            cameraManager.setTorchMode(torchCameraId, true);
-                        } catch (CameraAccessException | IllegalArgumentException ignored) {
-                        }
+                sphereHolder.setScaleX(1f);
+                sphereHolder.setScaleY(1f);
+                sphereHolder.setTranslationX(0f);
+                sphereHolder.setTranslationY(0f);
+
+                mossSphere.setAlpha(1f);
+                whiteCircle.setAlpha(0f);
+                shadow.setAlpha(1f);
+
+                if (torchCameraId != null) {
+                    try {
+                        cameraManager.setTorchMode(torchCameraId, false);
+                    } catch (CameraAccessException | IllegalArgumentException ignored) {
                     }
+                }
 
-                    sphereHolder.setScaleX(1f);
-                    sphereHolder.setScaleY(1f);
-                    sphereHolder.setTranslationX(0f);
-                    sphereHolder.setTranslationY(0f);
-                    mossSphere.setAlpha(1f);
-                    whiteCircle.setAlpha(0f);
-                    shadow.setAlpha(1f);
-
-                    state = ST_ON;
-                    startFloating();
-                }, 3000L);
+                state = ST_ON;
+                startFloating();
             })
             .start();
 }
+    
     
     private void restoreForest() {
         state = ST_RESTORING;
