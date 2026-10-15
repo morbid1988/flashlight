@@ -162,11 +162,11 @@ root.addView(threeDForestView, new FrameLayout.LayoutParams(
     // Tap on the forest while the torch is on: the forest comes alive, torch goes off,
     // the moss sphere dissolves over 3 seconds. Tap again: everything returns.
     private void onForestTap() {
-        if (state == ST_ON) {
-            goAlive();
-        } else if (state == ST_ALIVE) {
-            restoreForest();
-        }
+    if (state == ST_ON) {
+        goAlive();
+    } else if (state == ST_ALIVE) {
+        threeDForestView.returnToStart();
+    }
     }
 
     private void goAlive() {
