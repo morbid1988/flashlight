@@ -1,10 +1,11 @@
 package com.example.torch;
-import android.media.MediaPlayer;
+
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.media.MediaPlayer;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -17,8 +18,6 @@ import java.util.Random;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.Toast;
-import android.os.Handler;
-import android.os.Looper;
 
 public class MainActivity extends Activity {
 
@@ -31,14 +30,13 @@ public class MainActivity extends Activity {
     private FrameLayout rootView;
     private float holderSizePx;
     private ValueAnimator restoreAnim;
+    private MediaPlayer music;
     private final Random random = new Random();
 
     private PsychForestView forestView;
-    private MediaPlayer forestMusic;
-    private ThreeDForestView threeDForestView;
-private final Handler forestHandler =
-        new Handler(Looper.getMainLooper());
-private final Runnable journeyEnd = this::finishJourney;
+    private VideoForestView glView;
+    private MagicOverlayView magic;
+    private boolean ending = false;
     private View whiteCircle;
     private ImageView mossSphere;
     private View shadow;
@@ -85,14 +83,22 @@ private final Runnable journeyEnd = this::finishJourney;
         root.addView(forestView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
-        // 3D forest scene, hidden until the journey starts
-threeDForestView = new ThreeDForestView(this);
-threeDForestView.setAlpha(0f);
-threeDForestView.setVisibility(View.INVISIBLE);
 
-root.addView(threeDForestView, new FrameLayout.LayoutParams(
-        FrameLayout.LayoutParams.MATCH_PARENT,
-        FrameLayout.LayoutParams.MATCH_PARENT));
+        // the living-forest journey (video + shader), hidden until the forest comes alive
+        glView = new VideoForestView(this);
+        glView.setVisibility(View.GONE);
+        glView.setOnClickListener(v -> onForestTap());
+        root.addView(glView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+
+        // magic mushrooms, moss light and spores on top of the video
+        magic = new MagicOverlayView(this);
+        magic.setVisibility(View.GONE);
+        magic.setClickable(false);
+        root.addView(magic, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
 
         // Soft shadow on the "ground" under the floating sphere
         shadow = new View(this);
@@ -140,7 +146,7 @@ root.addView(threeDForestView, new FrameLayout.LayoutParams(
 
         sphereHolder.setOnClickListener(v -> {
             if (state == ST_ALIVE) {
-                restoreForest();
+                if (!ending) tapEnd();
             } else if (state == ST_ON || state == ST_OFF) {
                 toggleTorch();
             }
@@ -161,34 +167,75 @@ root.addView(threeDForestView, new FrameLayout.LayoutParams(
 
     // Tap on the forest while the torch is on: the forest comes alive, torch goes off,
     // the moss sphere dissolves over 3 seconds. Tap again: everything returns.
-    
-private void onForestTap() {
-    if (state == ST_ON) {
-        goAlive();
-    } else if (state == ST_ALIVE) {
-        forestHandler.removeCallbacks(journeyEnd);
-        threeDForestView.returnToStart();
-        forestHandler.postDelayed(journeyEnd, 6000L);
+    private void onForestTap() {
+        if (state == ST_ON) {
+            goAlive();
+        } else if (state == ST_ALIVE && !ending) {
+            tapEnd();
+        }
     }
-}
 
+    // Music: res/raw/forest_music.(mp3|ogg|m4a|wav). Starts from the beginning every time the forest comes alive.
+    private void startMusic() {
+        stopMusic();
+        int id = getResources().getIdentifier("forest_music", "raw", getPackageName());
+        if (id == 0) {
+            id = getResources().getIdentifier("psy_music", "raw", getPackageName());
+        }
+        if (id == 0) {
+            return;
+        }
+        try {
+            music = MediaPlayer.create(this, id);
+            if (music != null) {
+                music.setLooping(false);
+                music.start();
+            }
+        } catch (RuntimeException e) {
+            music = null;
+        }
+    }
+
+    private void stopMusic() {
+        if (music != null) {
+            try {
+                music.stop();
+            } catch (RuntimeException e) {
+                // already stopped
+            }
+            music.release();
+            music = null;
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // leaving the app during the journey ends it: back to the still forest
+        if (state == ST_ALIVE && !ending) {
+            ending = true;
+            stopMusic();
+            glView.stopNow();
+            glView.setVisibility(View.GONE);
+            magic.setVisibility(View.GONE);
+            restoreForest();
+        }
+        glView.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        glView.onResume();
+    }
 
     private void goAlive() {
         state = ST_ALIVE;
-        startForestMusic();
-        forestHandler.removeCallbacks(journeyEnd);
-forestView.setAlive(false);
-        forestView.setRipple(0f, 0f, 0f);
-
-threeDForestView.setVisibility(View.VISIBLE);
-threeDForestView.setAlpha(0f);
-threeDForestView.startJourney();
-threeDForestView.animate()
-        .alpha(1f)
-        .setDuration(900)
-        .start();
-
-forestHandler.postDelayed(journeyEnd, 293000L);
+        ending = false;
+        startMusic();
+        glView.setVisibility(View.VISIBLE);
+        magic.setVisibility(View.VISIBLE);
+        glView.startJourney(this::onVideoCompleted);
         if (torchCameraId != null) {
             try {
                 cameraManager.setTorchMode(torchCameraId, false);
@@ -206,61 +253,33 @@ forestHandler.postDelayed(journeyEnd, 293000L);
         shadow.animate().alpha(0f).setDuration(3000).start();
     }
 
+    // the video reached its end: the tree sways 3 s, goes still, the sphere grows back
+    private void onVideoCompleted() {
+        runOnUiThread(() -> {
+            if (state != ST_ALIVE || ending) return;
+            ending = true;
+            magic.setVisibility(View.GONE);
+            glView.endJourney(true, this::afterJourney);
+        });
+    }
 
-private void finishJourney() {
-    if (state != ST_ALIVE) return;
+    // second tap: everything settles back at once
+    private void tapEnd() {
+        ending = true;
+        stopMusic();
+        magic.setVisibility(View.GONE);
+        glView.endJourney(false, this::afterJourney);
+    }
 
-    state = ST_RESTORING;
-    forestHandler.removeCallbacks(journeyEnd);
+    private void afterJourney() {
+        stopMusic();
+        glView.setVisibility(View.GONE);
+        restoreForest();
+    }
 
-    stopForestMusic();
-    threeDForestView.stopJourney();
-
-    threeDForestView.animate()
-            .alpha(0f)
-            .setDuration(500)
-            .withEndAction(() -> {
-                threeDForestView.setVisibility(View.INVISIBLE);
-
-                forestView.setAlpha(1f);
-                forestView.setAlive(false);
-                forestView.setRipple(0f, 0f, 0f);
-
-                sphereHolder.animate().cancel();
-                mossSphere.animate().cancel();
-                shadow.animate().cancel();
-
-                sphereHolder.setScaleX(1f);
-                sphereHolder.setScaleY(1f);
-                sphereHolder.setTranslationX(0f);
-                sphereHolder.setTranslationY(0f);
-
-                mossSphere.setAlpha(1f);
-                whiteCircle.setAlpha(0f);
-                shadow.setAlpha(1f);
-
-                if (torchCameraId != null) {
-                    try {
-                        cameraManager.setTorchMode(torchCameraId, false);
-                    } catch (CameraAccessException | IllegalArgumentException ignored) {
-                    }
-                }
-
-                state = ST_ON;
-                startFloating();
-            })
-            .start();
-}
-    
-    
     private void restoreForest() {
         state = ST_RESTORING;
-        forestHandler.removeCallbacks(journeyEnd);
-threeDForestView.stopJourney();
-threeDForestView.animate().cancel();
-threeDForestView.setAlpha(0f);
-threeDForestView.setVisibility(View.INVISIBLE);
-        stopForestMusic();
+        stopMusic();
         mossSphere.animate().cancel();
         shadow.animate().cancel();
         stopFloating();
@@ -333,6 +352,7 @@ threeDForestView.setVisibility(View.INVISIBLE);
                 shadow.setScaleY(0.22f);
                 shadow.setAlpha(1f);
                 state = ST_ON;
+                ending = false;
                 startFloating();
             }
         });
@@ -396,44 +416,18 @@ threeDForestView.setVisibility(View.INVISIBLE);
             Toast.makeText(this, "Could not control the flash", Toast.LENGTH_SHORT).show();
         }
     }
-private void startForestMusic() {
-    if (forestMusic == null) {
-        forestMusic = MediaPlayer.create(this, R.raw.forest_music);
-    }
 
-    if (forestMusic != null) {
-        forestMusic.setLooping(true);
-
-        if (!forestMusic.isPlaying()) {
-            forestMusic.start();
-        }
-    }
-}
-
-private void stopForestMusic() {
-    if (forestMusic != null) {
-        if (forestMusic.isPlaying()) {
-            forestMusic.stop();
-        }
-
-        forestMusic.release();
-        forestMusic = null;
-    }
-}
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        forestHandler.removeCallbacks(journeyEnd);
-if (threeDForestView != null) {
-    threeDForestView.stopJourney();
-}
-        stopForestMusic();
         if (floatAnim != null) {
             floatAnim.cancel();
         }
         if (restoreAnim != null) {
             restoreAnim.cancel();
         }
+        stopMusic();
+        glView.stopNow();
         if (torchCameraId != null) {
             cameraManager.unregisterTorchCallback(torchCallback);
         }
