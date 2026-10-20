@@ -461,4 +461,80 @@ public class VideoForestView extends GLSurfaceView {
                 sway = Journey.smooth(0f, 1f, e);
             } else if (m == M_VIDEO) {
                 float vt = (now - firstFrameNs) / 1e9f;
-                m
+                mix = Journey.smooth(0f, 4f, vt);
+                sway = 1f - mix;
+                intensity = Journey.intensity(vt);
+            } else if (m == M_OUTRO) {
+                float o = (now - modeStartNs) / 1e9f;
+                float fade = Journey.smooth(0f, 1.2f, o);
+                mix = outroFromMix * (1f - fade);
+                intensity = outroFromI * (1f - fade);
+                if (outroSway) {
+                    float hold = 1.2f + 3f;
+                    sway = o < hold ? 1f : 1f - Journey.smooth(hold, hold + 0.6f, o);
+                    if (o >= hold + 0.6f) {
+                        setMode(M_DONE);
+                    }
+                } else {
+                    sway = 0f;
+                    if (o >= 1.2f) {
+                        setMode(M_DONE);
+                    }
+                }
+            }
+            lastMix = mix;
+            lastI = intensity;
+
+            // layout numbers
+            float viewAR = vw / (float) vh;
+            float sx = Math.min(1f, viewAR / photoAspect);
+            float sy = Math.min(1f, photoAspect / viewAR);
+            float cw = Math.min(1f, viewAR / videoAspect);
+            float bandFrac = 1f;
+            float panX = 0.5f + (0.5f - cw / 2f) * (float) Math.sin(t * 0.04f);
+
+            GLES20.glUseProgram(program);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTex);
+            GLES20.glUniform1i(uVideo, 0);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, photoTex);
+            GLES20.glUniform1i(uPhoto, 1);
+            GLES20.glUniformMatrix4fv(uSTM, 1, false, stm, 0);
+            GLES20.glUniform1f(uTime, t);
+            GLES20.glUniform1f(uI, intensity);
+            GLES20.glUniform1f(uMix, gotFrame ? mix : 0f);
+            GLES20.glUniform1f(uSway, sway);
+            GLES20.glUniform1f(uAsp, vh / (float) vw);
+            GLES20.glUniform2f(uPhotoScale, sx, sy);
+            GLES20.glUniform1f(uBand, bandFrac);
+            GLES20.glUniform1f(uCW, cw);
+            GLES20.glUniform1f(uPanX, panX);
+
+            quad.position(0);
+            GLES20.glEnableVertexAttribArray(aPos);
+            GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 16, quad);
+            quad.position(2);
+            GLES20.glEnableVertexAttribArray(aUV);
+            GLES20.glVertexAttribPointer(aUV, 2, GLES20.GL_FLOAT, false, 16, quad);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        }
+
+        private int buildProgram(String vs, String fs) {
+            int v = compile(GLES20.GL_VERTEX_SHADER, vs);
+            int f = compile(GLES20.GL_FRAGMENT_SHADER, fs);
+            int p = GLES20.glCreateProgram();
+            GLES20.glAttachShader(p, v);
+            GLES20.glAttachShader(p, f);
+            GLES20.glLinkProgram(p);
+            return p;
+        }
+
+        private int compile(int type, String src) {
+            int s = GLES20.glCreateShader(type);
+            GLES20.glShaderSource(s, src);
+            GLES20.glCompileShader(s);
+            return s;
+        }
+    }
+}
