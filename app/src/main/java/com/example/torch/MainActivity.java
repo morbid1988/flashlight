@@ -35,7 +35,6 @@ public class MainActivity extends Activity {
 
     private PsychForestView forestView;
     private VideoForestView glView;
-    private MagicOverlayView magic;
     private boolean ending = false;
     private View whiteCircle;
     private ImageView mossSphere;
@@ -92,13 +91,6 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        // magic mushrooms, moss light and spores on top of the video
-        magic = new MagicOverlayView(this);
-        magic.setVisibility(View.GONE);
-        magic.setClickable(false);
-        root.addView(magic, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT));
 
         // Soft shadow on the "ground" under the floating sphere
         shadow = new View(this);
@@ -217,7 +209,6 @@ public class MainActivity extends Activity {
             stopMusic();
             glView.stopNow();
             glView.setVisibility(View.GONE);
-            magic.setVisibility(View.GONE);
             restoreForest();
         }
         glView.onPause();
@@ -234,7 +225,6 @@ public class MainActivity extends Activity {
         ending = false;
         startMusic();
         glView.setVisibility(View.VISIBLE);
-        magic.setVisibility(View.VISIBLE);
         glView.startJourney(this::onVideoCompleted);
         if (torchCameraId != null) {
             try {
@@ -258,7 +248,6 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> {
             if (state != ST_ALIVE || ending) return;
             ending = true;
-            magic.setVisibility(View.GONE);
             glView.endJourney(true, this::afterJourney);
         });
     }
@@ -267,7 +256,6 @@ public class MainActivity extends Activity {
     private void tapEnd() {
         ending = true;
         stopMusic();
-        magic.setVisibility(View.GONE);
         glView.endJourney(false, this::afterJourney);
     }
 
@@ -432,4 +420,4 @@ public class MainActivity extends Activity {
             cameraManager.unregisterTorchCallback(torchCallback);
         }
     }
-}
+            }
