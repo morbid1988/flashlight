@@ -51,10 +51,11 @@ public class VideoForestView extends GLSurfaceView {
         /** How strong the "vision" is, over the 290 s journey. */
         public static float intensity(float vt) {
             if (vt < 0f) return 0f;
-            float ramp = 0.25f + 0.75f * smooth(0f, 35f, vt);
-            float pulse = 0.90f + 0.10f * (float) Math.sin(vt * 0.35f);
-            float tail = 1f - 0.65f * smooth(266f, 284f, vt);
-            return Math.max(0f, Math.min(1f, ramp * pulse * tail));
+            // soft and gentle: the real footage stays clearly visible
+            float ramp = 0.30f + 0.70f * smooth(0f, 45f, vt);
+            float pulse = 0.85f + 0.15f * (float) Math.sin(vt * 0.30f);
+            float tail = 1f - 0.85f * smooth(262f, 284f, vt);
+            return Math.max(0f, Math.min(0.4f, 0.4f * ramp * pulse * tail));
         }
     }
 
@@ -249,8 +250,8 @@ public class VideoForestView extends GLSurfaceView {
                     + "\n"
                     + "vec3 video(vec2 uv){\n"
                     + "  float t = uTime;\n"
-                    + "  float yb = (uv.y - 0.5) / uBand + 0.5 + 0.02 * sin(t * 0.13);\n"
-                    + "  float y = mirror1(yb);\n"
+                    + "  float yb = uv.y;\n"
+                    + "  float y = clamp(yb, 0.0, 1.0);\n"
                     + "  float x = (uv.x - 0.5) * uCW + uPanX;\n"
                     + "  float near = 1.0 - y;\n"
                     + "  vec2 c0 = vec2(x, y);\n"
@@ -258,7 +259,10 @@ public class VideoForestView extends GLSurfaceView {
                     + "  vec2 off = uI * 0.014 * vec2(sin(t*0.7 + y*9.0 + lum*5.0), cos(t*0.6 + x*7.0 + lum*4.0)) * (0.35 + near);\n"
                     + "  off.x += uI * 0.011 * sin(y*22.0 + t*1.4) * (1.0 - lum);\n"
                     + "  off.y += uI * 0.006 * sin(x*30.0 + t*0.9);\n"
-                    + "  float k = 1.0 + 0.9 * uI;\n"
+                    + "  float topw = 0.4 + 0.6 * y * y;\n"
+                    + "  off.x += uI * 0.020 * topw * sin(t*0.9 + y*3.0 + x*2.0);\n"
+                    + "  off.x += uI * 0.010 * sin(t*1.7 + x*11.0 + y*6.0);\n"
+                    + "  float k = 1.0 + 0.5 * uI;\n"
                     + "  vec3 col;\n"
                     + "  col.r = vsample(c0 + off * k).r;\n"
                     + "  col.g = vsample(c0 + off).g;\n"
@@ -271,14 +275,14 @@ public class VideoForestView extends GLSurfaceView {
                     + "  float a = uI * (1.6 * sin(t*0.27 + l2*3.0 + y*2.0) + 0.8 * sin(t*0.11 + x*4.0));\n"
                     + "  vec3 rot = hueRot(col, a);\n"
                     + "  float ll = dot(rot, W);\n"
-                    + "  rot = mix(vec3(ll), rot, 1.0 + 0.8 * uI);\n"
-                    + "  col = mix(col, rot, clamp(0.25 + 0.7 * uI, 0.0, 1.0));\n"
-                    + "  col = (col - 0.5) * (1.0 + 0.25 * uI) + 0.5;\n"
+                    + "  rot = mix(vec3(ll), rot, 1.0 + 0.6 * uI);\n"
+                    + "  col = mix(col, rot, clamp(0.30 + 0.9 * uI, 0.0, 0.7));\n"
+                    + "  col = (col - 0.5) * (1.0 + 0.12 * uI) + 0.5;\n"
                     + "  vec3 glow = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + t * 0.05 + edge * 2.0));\n"
-                    + "  col += glow * edge * 2.2 * uI;\n"
+                    + "  col += glow * edge * 0.9 * uI;\n"
                     + "  vec2 gc = c0 + vec2(0.02 * sin(t*0.5), 0.015 * cos(t*0.4)) + off * 2.0;\n"
                     + "  vec3 g = hueRot(vsample(gc), a + 2.1);\n"
-                    + "  col = 1.0 - (1.0 - clamp(col, 0.0, 1.0)) * (1.0 - g * 0.30 * uI);\n"
+                    + "  col = 1.0 - (1.0 - clamp(col, 0.0, 1.0)) * (1.0 - g * 0.45 * uI);\n"
                     + "  for (int i = 0; i < 3; i++) {\n"
                     + "    float fi = float(i);\n"
                     + "    vec2 ctr = vec2(0.5 + 0.40 * sin(t*0.29 + fi*2.1), 0.5 + 0.40 * cos(t*0.23 + fi*1.7));\n"
@@ -457,80 +461,4 @@ public class VideoForestView extends GLSurfaceView {
                 sway = Journey.smooth(0f, 1f, e);
             } else if (m == M_VIDEO) {
                 float vt = (now - firstFrameNs) / 1e9f;
-                mix = Journey.smooth(0f, 4f, vt);
-                sway = 1f - mix;
-                intensity = Journey.intensity(vt);
-            } else if (m == M_OUTRO) {
-                float o = (now - modeStartNs) / 1e9f;
-                float fade = Journey.smooth(0f, 1.2f, o);
-                mix = outroFromMix * (1f - fade);
-                intensity = outroFromI * (1f - fade);
-                if (outroSway) {
-                    float hold = 1.2f + 3f;
-                    sway = o < hold ? 1f : 1f - Journey.smooth(hold, hold + 0.6f, o);
-                    if (o >= hold + 0.6f) {
-                        setMode(M_DONE);
-                    }
-                } else {
-                    sway = 0f;
-                    if (o >= 1.2f) {
-                        setMode(M_DONE);
-                    }
-                }
-            }
-            lastMix = mix;
-            lastI = intensity;
-
-            // layout numbers
-            float viewAR = vw / (float) vh;
-            float sx = Math.min(1f, viewAR / photoAspect);
-            float sy = Math.min(1f, photoAspect / viewAR);
-            float bandPx = vw / (CROP_W * videoAspect);
-            float bandFrac = bandPx / vh;
-            float panX = 0.5f + (0.5f - CROP_W / 2f) * (float) Math.sin(t * 0.07f);
-
-            GLES20.glUseProgram(program);
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTex);
-            GLES20.glUniform1i(uVideo, 0);
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, photoTex);
-            GLES20.glUniform1i(uPhoto, 1);
-            GLES20.glUniformMatrix4fv(uSTM, 1, false, stm, 0);
-            GLES20.glUniform1f(uTime, t);
-            GLES20.glUniform1f(uI, intensity);
-            GLES20.glUniform1f(uMix, gotFrame ? mix : 0f);
-            GLES20.glUniform1f(uSway, sway);
-            GLES20.glUniform1f(uAsp, vh / (float) vw);
-            GLES20.glUniform2f(uPhotoScale, sx, sy);
-            GLES20.glUniform1f(uBand, bandFrac);
-            GLES20.glUniform1f(uCW, CROP_W);
-            GLES20.glUniform1f(uPanX, panX);
-
-            quad.position(0);
-            GLES20.glEnableVertexAttribArray(aPos);
-            GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 16, quad);
-            quad.position(2);
-            GLES20.glEnableVertexAttribArray(aUV);
-            GLES20.glVertexAttribPointer(aUV, 2, GLES20.GL_FLOAT, false, 16, quad);
-            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
-        }
-
-        private int buildProgram(String vs, String fs) {
-            int v = compile(GLES20.GL_VERTEX_SHADER, vs);
-            int f = compile(GLES20.GL_FRAGMENT_SHADER, fs);
-            int p = GLES20.glCreateProgram();
-            GLES20.glAttachShader(p, v);
-            GLES20.glAttachShader(p, f);
-            GLES20.glLinkProgram(p);
-            return p;
-        }
-
-        private int compile(int type, String src) {
-            int s = GLES20.glCreateShader(type);
-            GLES20.glShaderSource(s, src);
-            GLES20.glCompileShader(s);
-            return s;
-        }
-    }
-}
+                m
